@@ -6,9 +6,9 @@
 // Local variables
 namespace {
     unsigned long lastSample    = 0;
-    unsigned long INTERVAL      = 50;
-    Adafruit_BME280 bme;                // Create an instance of the BME280 sensor
-    Encoder encoder(2, 3);              // Create an Encoder object with pins 2 and 3
+    unsigned long INTERVAL      = 100;
+    Adafruit_BME280 bme;                                // Create an instance of the BME280 sensor
+    Encoder encoder(2, 3);                              // Create an Encoder object with pins 2 and 3
 }
 
 // Functions
@@ -20,27 +20,31 @@ void readBME280();
 void setup() {
   Serial.begin(115200);
   Serial.println("Hello, World!");
+  Serial.println("Initializing BME280 sensor...");
   while (!setupBME280()) {
     Serial.println("Failed to initialize BME280 sensor.");
-    }
+    delay(1000);
+  }
 }
 
+// Target output: {ms, temp, pressure, humidity, pot, enc}
 void loop() {
-    auto currentMillis = millis();
+    auto currentMillis = millis();    
+
     if(currentMillis - lastSample >= INTERVAL) {
-        Serial.print("Current millis: ");
-        Serial.println(currentMillis);
+        Serial.print(currentMillis);
+        Serial.print(',');
+        Serial.print(bme.readTemperature(), 2);         // 2 decimals
+        Serial.print(',');
+        Serial.print(bme.readPressure() / 100.0F, 2);   // 2 decimals
+        Serial.print(',');
+        Serial.print(bme.readHumidity(), 2);            // 2 decimals
+        Serial.print(',');
+        Serial.print(readPotentiometer());
+        Serial.print(',');
+        Serial.print(readEncoder(encoder));
+        Serial.println();
         lastSample = currentMillis;
-
-        Serial.print("Potentiometer value: ");
-        int potValue = readPotentiometer();
-        Serial.println(potValue);
-
-        Serial.print("Encoder value: ");
-        int encValue = readEncoder(encoder);
-        Serial.println(encValue);
-
-        readBME280();
     }
 }
 
@@ -55,18 +59,5 @@ int readEncoder(Encoder& encoder) {
 }
 
 bool setupBME280() {
-return bme.begin(0x76);             // true if a BME280 answered
-}
-
-void readBME280() {
-    float temperature = bme.readTemperature();        // degrees C
-    float pressure    = bme.readPressure() / 100.0F;  // Pa to hPa
-    float humidity    = bme.readHumidity();           // percent
-
-    Serial.print("Temperature: ");
-    Serial.println(temperature, 2);
-    Serial.print("Pressure: ");
-    Serial.println(pressure, 2);
-    Serial.print("Humidity: ");
-    Serial.println(humidity, 2);
+return bme.begin(0x76);                                 // true if a BME280 answered
 }
