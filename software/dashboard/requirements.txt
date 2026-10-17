@@ -1,0 +1,4 @@
+PyQt5==5.15.11
+pyqtgraph==0.14.0
+pyserial==3.5
+pytest==9.1.1
