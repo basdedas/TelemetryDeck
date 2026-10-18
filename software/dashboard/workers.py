@@ -2,6 +2,7 @@ import math
 import random
 import PyQt5.QtCore as QtCore
 import sys
+import serial
 
 def parse_line(raw: bytes):
     """Turn one raw serial line into a dict, or None if it is not a data line."""
@@ -47,6 +48,28 @@ class FakeWorker(QtCore.QThread):
             parsed_data = parse_line(desired_line.encode("ascii"))
             if parsed_data:
                 self.data.emit(parsed_data)
+
+    def stop(self):
+        self._running = False
+        self.wait()
+
+class SerialWorker(QtCore.QThread):
+    data = QtCore.pyqtSignal(dict)
+
+    def __init__(self, port: str, baudrate: int = 115200):
+        super().__init__()
+        self.port = port
+        self.baudrate = baudrate
+        self._running = True
+
+    def run(self):
+        import serial
+        with serial.Serial(self.port, self.baudrate, timeout=1) as ser:
+            while self._running:
+                line = ser.readline()
+                parsed_data = parse_line(line)
+                if parsed_data:
+                    self.data.emit(parsed_data)
 
     def stop(self):
         self._running = False
