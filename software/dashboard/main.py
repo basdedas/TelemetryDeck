@@ -1,4 +1,5 @@
 import sys
+from PyQt5 import uic
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QVBoxLayout, QWidget, QWidget
 import pyqtgraph as pg
 from collections import deque
@@ -9,28 +10,28 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        uic.loadUi("dashboard.ui", self)                                # Load the UI from the .ui file
 
         # Initialize the UI
         KEYS = ["t", "temp", "pressure", "humidity", "pot", "enc"]      # All the keys we expect from the data, in order
-        COLORS = ['r', 'g', 'b', 'c', 'm']                              # Colors for the plots
+        COLORS = ['r', 'g', 'b', 'orange', 'm']                         # Colors for the plots
         
-        self.buffers = {key: deque(maxlen=500) for key in KEYS}         # Store the last 500 samples for each key
+        self.buffers = {key: deque(maxlen=100) for key in KEYS}         # Store the last 500 samples for each key
         self.plots = {}
         self.curves = {}
-        
-        central = QWidget()
-        layout = QVBoxLayout()
 
         for key, color in zip(KEYS[1:], COLORS):
-            plot_widget = pg.PlotWidget(title=key)
-            plot_widget.setLabel('left', key)
-            plot_widget.setLabel('bottom', 'Time (s)')
-            layout.addWidget(plot_widget)
-            self.plots[key] = plot_widget
-            self.curves[key] = plot_widget.plot(pen=color)
-        
-        central.setLayout(layout)
-        self.setCentralWidget(central)
+            plot = getattr(self, f"plot_{key}")
+            plot.setTitle(key)
+            plot.setLabel("left", key)
+            plot.setLabel("bottom", "Time (s)")
+
+            plot.setMouseEnabled(x=False, y=True)  # Enable mouse interaction for panning only
+            plot.showGrid(x=True, y=True)  # Show grid lines for better readability
+            plot.setBackground(None)  # Set background color to white
+
+            self.plots[key] = plot
+            self.curves[key] = plot.plot(pen=color)
 
         self.worker = SerialWorker("COM3", 115200)
         self.worker.data.connect(self.on_sample)
