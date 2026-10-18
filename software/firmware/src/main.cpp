@@ -79,8 +79,9 @@ void handleSerial() {
             buf[len] = '\0';
             len = 0;
 
-            if (strncmp(buf, "INTERVAL ", 5) == 0) {
-                INTERVAL = constrain(atol(buf + 5), 20, 10000);
+
+            if (strncmp(buf, "INTERVAL ", 9) == 0) {
+                INTERVAL = constrain(atol(buf + 9), 20, 10000);
                 Serial.print("# interval set to ");
                 Serial.println(INTERVAL);
             } else {
