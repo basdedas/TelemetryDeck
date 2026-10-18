@@ -113,11 +113,13 @@
         <item>
          <layout class="QVBoxLayout" name="recording">
           <item>
-           <widget class="QPushButton" name="set_button">
-            <property name="text">
-             <string>Set interval</string>
-            </property>
-           </widget>
+            <widget class="QSpinBox" name="interval_spin">
+                <property name="suffix"><string> ms</string></property>
+                <property name="minimum"><number>20</number></property>
+                <property name="maximum"><number>10000</number></property>
+                <property name="singleStep"><number>10</number></property>
+                <property name="value"><number>100</number></property>
+            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="clear_button">
@@ -139,12 +141,6 @@
              <string>Pause</string>
             </property>
            </widget>
-          </item>
-          <item>
-           <widget class="QSpinBox" name="interval_spin"/>
-          </item>
-          <item>
-           <widget class="QWidget" name="widget" native="true"/>
           </item>
           <item>
            <spacer name="verticalSpacer_2">

@@ -1,6 +1,6 @@
 import sys
 from PyQt5 import uic
-from PyQt5.QtWidgets import QApplication, QComboBox, QMainWindow, QPushButton, QVBoxLayout, QVBoxLayout, QWidget, QWidget
+from PyQt5.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow, QPushButton, QSpinBox, QVBoxLayout, QVBoxLayout, QWidget, QWidget
 import pyqtgraph as pg
 from collections import deque
 import serial.tools.list_ports
@@ -11,6 +11,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        # Connect the UI elements to their respective slots
         uic.loadUi("dashboard.ui", self)                                # Load the UI from the .ui file
         self.worker = None
         refresh_button = self.findChild(QPushButton, "refresh_button")
@@ -19,8 +21,13 @@ class MainWindow(QMainWindow):
         connect_button = self.findChild(QPushButton, "connect_button")
         connect_button.clicked.connect(self.connect)
         port_combo.clear()
-
+        status_label = self.findChild(QLabel, "status_label")
+        status_label.setText("Disconnected")
+        interval_spin = self.findChild(QSpinBox, "interval_spin")
+        interval_spin.valueChanged.connect(self.worker.set_interval if self.worker else lambda value: None)        
         self.refresh_ports()                                            # Refresh the ports when the application starts
+        self.interval_spin.setKeyboardTracking(False)                   # Disable keyboard tracking to avoid rapid updates
+        self.interval_spin.valueChanged.connect(self.set_interval)      # Connect the interval spin box to the set_interval method        
         
         # Initialize the UI
         KEYS = ["t", "temp", "pressure", "humidity", "pot", "enc"]      # All the keys we expect from the data, in order
@@ -78,10 +85,18 @@ class MainWindow(QMainWindow):
                 self.worker = FakeWorker()
             else:
                 self.worker = SerialWorker(selected_port, 115200)
+            self.interval_spin.blockSignals(True)
+            self.interval_spin.setValue(100)
+            self.interval_spin.blockSignals(False)
             self.worker.data.connect(self.on_sample)
             self.clear_buffers()                                       # Clear buffers when connecting to a new port
             self.worker.start()
-            
+            self.status_label.setText(f"Connected to {selected_port}")
+
+    def set_interval(self, value):
+        if self.worker is not None:
+            self.worker.set_interval(value)
+
     def closeEvent(self, event):
         if self.worker:
             self.worker.stop()
