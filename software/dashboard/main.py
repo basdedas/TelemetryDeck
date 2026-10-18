@@ -4,10 +4,14 @@ from PyQt5.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow, QPushB
 import pyqtgraph as pg
 from collections import deque
 import serial.tools.list_ports
+from datetime import datetime
+from pathlib import Path
 
+from recorder import Recorder
 from workers import FakeWorker, SerialWorker
 
 class MainWindow(QMainWindow):        
+    LOG_DIR = Path(__file__).parent / "logs"                            # Define the logs directory
 
     def __init__(self):
         super().__init__()
@@ -16,23 +20,30 @@ class MainWindow(QMainWindow):
         uic.loadUi("dashboard.ui", self)                                # Load the UI from the .ui file
         self.worker = None
         refresh_button = self.findChild(QPushButton, "refresh_button")
-        refresh_button.clicked.connect(self.refresh_ports)
         port_combo = self.findChild(QComboBox, "port_combo")
         connect_button = self.findChild(QPushButton, "connect_button")
-        connect_button.clicked.connect(self.connect)
-        port_combo.clear()
-        status_label = self.findChild(QLabel, "status_label")
-        status_label.setText("Disconnected")
         interval_spin = self.findChild(QSpinBox, "interval_spin")
-        interval_spin.valueChanged.connect(self.worker.set_interval if self.worker else lambda value: None)        
+        clear_button = self.findChild(QPushButton, "clear_button")
+        pause_button = self.findChild(QPushButton, "pause_button")
+        status_label = self.findChild(QLabel, "status_label")
+        record_button = self.findChild(QPushButton, "record_button")
+        
+        refresh_button.clicked.connect(self.refresh_ports)
+        port_combo.clear()
+        connect_button.clicked.connect(self.connect)
+        status_label.setText("Disconnected")
+
+        clear_button.clicked.connect(self.clear_buffers)                # Connect the clear button to the clear_buffers
+        pause_button.toggled.connect(self.pause_resume)                 # Connect the toggle state to the pause_resume method
+        self.paused = False
+
         self.refresh_ports()                                            # Refresh the ports when the application starts
         self.interval_spin.setKeyboardTracking(False)                   # Disable keyboard tracking to avoid rapid updates
         self.interval_spin.valueChanged.connect(self.set_interval)      # Connect the interval spin box to the set_interval method        
-        clear_button = self.findChild(QPushButton, "clear_button")
-        clear_button.clicked.connect(self.clear_buffers)                # Connect the clear button to the clear_buffers
-        pause_button = self.findChild(QPushButton, "pause_button")
-        pause_button.toggled.connect(self.pause_resume)                 # Connect the toggle state to the pause_resume method
-        self.paused = False
+
+        self.recorder = Recorder()                                         # Initialize the Recorder instance
+        record_button.toggled.connect(self.toggle_recording)                # Connect the record button toggle to the toggle_recording method
+        self.LOG_DIR.mkdir(exist_ok=True)                                    # Create the logs directory if it doesn't exist
 
         # Initialize the UI
         KEYS = ["t", "temp", "pressure", "humidity", "pot", "enc"]      # All the keys we expect from the data, in order
@@ -67,6 +78,7 @@ class MainWindow(QMainWindow):
             return                                                      # Ignore data from any worker that is not the current one
         for key in self.buffers:
             self.buffers[key].append(data[key])
+        self.recorder.record_data(data)
         if not self.paused:
             self.redraw()
 
@@ -82,13 +94,14 @@ class MainWindow(QMainWindow):
         port_combo = self.findChild(QComboBox, "port_combo")
         selected_port = port_combo.currentText()
         if selected_port:
+            self.record_button.setChecked(False)
             if self.worker is not None:
                 self.worker.data.disconnect(self.on_sample)
                 self.worker.stop()
             if selected_port == "Fake":
                 self.worker = FakeWorker()
             else:
-                self.worker = SerialWorker(selected_port, 115200)
+                self.worker = SerialWorker(selected_port, 115200)            
             self.interval_spin.blockSignals(True)
             self.interval_spin.setValue(100)
             self.interval_spin.blockSignals(False)
@@ -113,9 +126,22 @@ class MainWindow(QMainWindow):
            self.redraw()
 
     def closeEvent(self, event):
+        self.recorder.stop_recording()
         if self.worker:
             self.worker.stop()
         event.accept()
+
+    def toggle_recording(self, checked):
+        if checked:
+            self.LOG_DIR.mkdir(exist_ok=True)
+            name = datetime.now().strftime("telemetry_%Y-%m-%d_%H-%M-%S.csv")
+            self.recorder.start_recording(self.LOG_DIR / name)
+            self.record_button.setText("Stop")
+            self.record_label.setText(f"Recording: {name}")
+        else:
+            self.recorder.stop_recording()
+            self.record_button.setText("Record")
+            self.record_label.setText("Not recording")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
