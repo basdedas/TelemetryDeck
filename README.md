@@ -67,3 +67,15 @@ On the PC, a `SerialWorker` thread reads each line with `port.readline()` and co
 The control path runs the other way: the UI can start and stop the worker and send commands such as `RATE n` back to the Arduino over the same serial link.
 
  ![Data flow](software/diagrams/data_flow.png)
+
+
+<h2> First results </h2>
+
+Live dashboard receiving data from the Arduino over UART at 115200 baud.
+Each value has its own plot with a shared time axis.
+
+![Live dashboard with five stacked plots: temperature, pressure, humidity, potentiometer and rotary encoder](software/diagrams/working_plots_v1.png)
+
+*Capture of a short test run: at about 31 s the sensor was warmed by hand
+(temperature and humidity rise, pressure dips), the potentiometer was turned
+between 7 and 13 s, and the encoder between 15 and 27 s.*
