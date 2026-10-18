@@ -28,7 +28,12 @@ class MainWindow(QMainWindow):
         self.refresh_ports()                                            # Refresh the ports when the application starts
         self.interval_spin.setKeyboardTracking(False)                   # Disable keyboard tracking to avoid rapid updates
         self.interval_spin.valueChanged.connect(self.set_interval)      # Connect the interval spin box to the set_interval method        
-        
+        clear_button = self.findChild(QPushButton, "clear_button")
+        clear_button.clicked.connect(self.clear_buffers)                # Connect the clear button to the clear_buffers
+        pause_button = self.findChild(QPushButton, "pause_button")
+        pause_button.toggled.connect(self.pause_resume)                 # Connect the toggle state to the pause_resume method
+        self.paused = False
+
         # Initialize the UI
         KEYS = ["t", "temp", "pressure", "humidity", "pot", "enc"]      # All the keys we expect from the data, in order
         COLORS = ['r', 'g', 'b', 'orange', 'm']                         # Colors for the plots
@@ -57,14 +62,13 @@ class MainWindow(QMainWindow):
             curve.setData([], [])                                       # Clear the plot data
 
     def on_sample(self, data):
+
         if self.sender() is not self.worker:
             return                                                      # Ignore data from any worker that is not the current one
         for key in self.buffers:
             self.buffers[key].append(data[key])
-
-        x = list(self.buffers["t"])                                     # take time seperately because it's shared
-        for key, curve in self.curves.items():
-            curve.setData(x, list(self.buffers[key]))
+        if not self.paused:
+            self.redraw()
 
     def refresh_ports(self):
         port_combo = self.findChild(QComboBox, "port_combo")
@@ -96,6 +100,17 @@ class MainWindow(QMainWindow):
     def set_interval(self, value):
         if self.worker is not None:
             self.worker.set_interval(value)
+
+    def redraw(self):
+       x = list(self.buffers["t"])
+       for key, curve in self.curves.items():
+           curve.setData(x, list(self.buffers[key]))
+
+    def pause_resume(self, checked):
+       self.paused = checked
+       self.pause_button.setText("Resume" if checked else "Pause")
+       if not checked:
+           self.redraw()
 
     def closeEvent(self, event):
         if self.worker:
