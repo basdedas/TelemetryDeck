@@ -1,81 +1,147 @@
-<h1>TelemetryDeck project</h1>
-I want to get more familiar with data visualization, specifically with PyQt. Using my embedded experience with UART and I2C. This project is a telemetry deck reading sensor data and visualizing it through PyQt.
+# TelemetryDeck
 
+A small telemetry dashboard: an Arduino Uno streams sensor data over UART to a PyQt5 desktop app that plots it live, logs it to CSV and sends commands back to the board.
 
-<h2>On hand equipment</h2>
+I built it to get more familiar with data visualization in PyQt, using my embedded experience with UART and I2C.
 
- - Arduino UNO
- - Rotary encoder
- - Potentiometer
- - BME280 (I2C)
+![TelemetryDeck dashboard showing live temperature, humidity, pressure, potentiometer and encoder plots with the control panel on the right](software/diagrams/example.png)
 
+*The dashboard receiving live data from the Arduino. The control panel (right) selects the port, sets the sample interval, pauses the display, clears the plots and records to CSV.*
 
-<h2>Goals</h2>
+## Features
 
- - Get familiar with PyQt5, designer and QSS
- - Freshen up basic embedded skills I2C / UART
- - Freshen up embedded C knowledge
- - Practice understandeable git logs and documentation
+- One live plot per value (temperature, humidity, pressure, potentiometer, rotary encoder)
+- Serial port selection with refresh, plus a **Fake** source for demos without hardware
+- Change the board's sample interval at runtime (20 to 10000 ms)
+- Pause the display while data keeps being collected
+- Clear the plots
+- Record to a timestamped CSV file (recording continues while the display is paused)
 
+## Goals
 
-<h2>Setup </h2>
+- Get familiar with PyQt5, Qt Designer and QSS
+- Freshen up basic embedded skills: I2C and UART
+- Freshen up embedded C/C++ knowledge
+- Practice understandable git history and documentation
+
+## Hardware
+
+| Part | Connection |
+|---|---|
+| Arduino Uno | USB to PC (UART at 115200 baud) |
+| BME280 (I2C, address 0x76) | SDA/SCL (A4/A5) |
+| Potentiometer | A0 |
+| Rotary encoder | D2 and D3 (interrupt pins) |
 
 ![TelemetryDeck schematic](hardware/telemetrydeckschematic.png)
 
-<h2>Software stack</h2>
-<h3> Firmware / Arduino (CPP) </h3>
-Built with PlatformIO
+## Software stack
 
+### Firmware (C++, PlatformIO)
 
 | Part | Used for |
 |---|---|
-| Arduino framework (C++) | Main loop, timing, serial I/O |
+| Arduino framework | Main loop, timing, serial I/O |
 | `Wire` | I2C communication with the sensor |
-| Adafruit BME280 and BMP280 libraries | Temperature, pressure, humidity (BME280 only) |
+| Adafruit BME280 | Temperature, pressure, humidity |
 | Adafruit Unified Sensor | Shared base library required by the Adafruit drivers |
 | Encoder (PJRC) | Interrupt-based rotary encoder counting |
 | `analogRead` | Potentiometer position (10-bit ADC) |
 | `Serial` (UART, 115200 baud) | Telemetry out, commands in |
 
-
-<h3> Dashboard (Python 3)</h3>
+### Dashboard (Python 3)
 
 | Part | Used for |
 |---|---|
 | PyQt5 | GUI framework |
-| Qt Designer and `uic` | Window layout in a `.ui` file, loaded at runtime |
-| QSS | Dark theme stylesheet |
+| Qt Designer and `uic` | Window layout in `dashboard.ui`, loaded at runtime |
 | pyqtgraph | Real-time plots |
 | pyserial | Reading and writing the serial port |
 | `QThread`, signals and slots | Serial I/O off the UI thread |
-| `collections.deque`, `csv` | Rolling plot buffer, data logging |
+| `collections.deque`, `csv` | Rolling plot buffers, data logging |
+| pytest | Unit tests for the parser and the recorder |
 
-<h3> Tools </h3>
+### Tools
 
- - Git
- - KiCAD
- - PlatformIO
- - Python venv
+Git, KiCad, PlatformIO, Python venv
 
+## Running the dashboard
 
-<h3>Data flow</h3>
+**1. Flash the firmware.** Open `software/firmware` in PlatformIO and upload it to the Arduino. Close any serial monitor afterwards, since only one program can use the port at a time.
 
-The Arduino collects three kinds of input: the rotary encoder (quadrature signals read through GPIO interrupts), the potentiometer (analog voltage read by the ADC) and the BME/BMP280 (I2C). Every sample interval it sends one CSV line over UART to the PC.
+**2. Install and start the app** (Windows, from the repository root):
 
-On the PC, a `SerialWorker` thread reads each line with `port.readline()` and converts it with `parse_line()`. It hands the result to the UI through the `sample(dict)` signal, so the worker never touches a widget and the window stays responsive. The `MainWindow` stores the values in fixed-size deque buffers, draws them with pyqtgraph, updates the labels and logs them to CSV.
+```
+python -m venv .venv
+.venv\Scripts\activate
+cd software\dashboard
+pip install -r requirements.txt
+python main.py
+```
 
-The control path runs the other way: the UI can start and stop the worker and send commands such as `RATE n` back to the Arduino over the same serial link.
+**3. This is what you see when the app opens:**
 
- ![Data flow](software/diagrams/data_flow.png)
+![TelemetryDeck dashboard after startup](software/diagrams/example.png)
 
+**4. Connect.**
+1. Choose the Arduino's COM port in the drop-down (press **Refresh** if it isn't listed). No board? Choose **Fake** to run on generated data.
+2. Press **Connect**. The status label shows the port, and the five plots start scrolling.
 
-<h2> First results </h2>
+**5. Use the controls.**
 
-Live dashboard receiving data from the Arduino over UART at 115200 baud.
-Each value has its own plot with a shared time axis.
+| Control | What it does |
+|---|---|
+| Interval box | Sets how often the board sends a sample (20 to 10000 ms). Press Enter or use the arrows to apply. |
+| Pause / Resume | Freezes the plots. Data keeps being collected. |
+| Clear | Empties the plots |
+| Record / Stop | Writes every sample to `software/dashboard/logs/telemetry_<timestamp>.csv` |
 
-![Live dashboard with five stacked plots: temperature, pressure, humidity, potentiometer and rotary encoder](software/diagrams/working_plots_v1.png)
+Run the unit tests with `python -m pytest -v` in `software\dashboard`.
 
-*Capture of a short test run: at about 31 s the sensor was warmed by hand
-(temperature and humidity rise, pressure dips), the potentiometer was turned
-between 7 and 13 s, and the encoder between 15 and 27 s.*
+## Serial protocol
+
+All messages are text lines ending in `\n`, at 115200 baud.
+
+| Direction | Message | Meaning |
+|---|---|---|
+| Arduino to PC | `ms,temp,pressure,humidity,pot,enc` | One sample, e.g. `122,23.98,972.51,45.11,256,0` |
+| Arduino to PC | `# ...` | Status or reply line, ignored by the data parser |
+| PC to Arduino | `INTERVAL <ms>` | Set the sample interval (clamped to 20 to 10000 ms) |
+| Arduino to PC | `# interval set to <ms>` | Confirmation |
+| Arduino to PC | `# unknown command` | The line was not a valid command |
+
+Units: `ms` is milliseconds since boot, `temp` in °C, `pressure` in hPa, `humidity` in %RH, `pot` is the raw ADC value (0 to 1023) and `enc` is the encoder count.
+
+## Data flow
+
+The Arduino collects three kinds of input: the rotary encoder (quadrature signals read through GPIO interrupts), the potentiometer (analog voltage read by the ADC) and the BME280 (I2C). Every sample interval it sends one CSV line over UART to the PC.
+
+On the PC, a `SerialWorker` thread reads each line with `readline()` and converts it with `parse_line()`. Lines that are not valid data (status lines, partial lines, bad numbers) are dropped. The worker hands each result to the UI through the `data(dict)` signal, so it never touches a widget and the window stays responsive. `MainWindow` stores the values in fixed-size deque buffers, draws them with pyqtgraph and passes every sample to the `Recorder`, which writes it to the CSV file.
+
+The control path runs the other way: the UI can start and stop the worker and send `INTERVAL <ms>` back to the Arduino over the same serial link. A `FakeWorker` with the same interface generates sine-wave data, so the UI can be developed and demonstrated without hardware.
+
+![Data flow](software/diagrams/data_flow.png)
+
+## Project structure
+
+```
+hardware/                      Schematic (KiCad export)
+software/
+  firmware/                    PlatformIO project (Arduino, C++)
+  dashboard/
+    main.py                    MainWindow: plots, controls, wiring
+    dashboard.ui               Layout, made in Qt Designer
+    workers.py                 parse_line, SerialWorker, FakeWorker
+    recorder.py                CSV recorder
+    test_workers.py            Parser tests
+    test_recorder.py           Recorder test
+    requirements.txt
+  diagrams/                    Images used in this README
+```
+
+## Known limitations and next steps
+
+- No explicit Disconnect button yet (reconnecting replaces the worker)
+- Dark QSS theme not implemented yet
+- Plot window is a fixed number of samples rather than a fixed time span
+- Connection errors are not yet shown in the UI
